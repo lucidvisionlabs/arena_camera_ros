@@ -1,0 +1,24 @@
+name: C/C++ CI
+
+on:
+  # Trigger the workflow on push or pull request,
+  # but only for the master branch
+  push:
+    branches:
+      - master
+      - 
+  pull_request:
+    branches:
+      - master
+
+jobs:
+  build:
+
+    runs-on: ubuntu-16.04
+    
+    steps:
+    - uses: actions/checkout@v2
+    - name: install_ros_and_env
+      run: sudo sh ./ros_and_workspace_setup.sh
+    - name: catkin_make
+      run: catkin_make

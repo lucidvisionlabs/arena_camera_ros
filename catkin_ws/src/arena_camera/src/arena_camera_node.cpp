@@ -678,7 +678,7 @@ void ArenaCameraNode::setupRectification()
     cv_bridge_img_rect_ = new cv_bridge::CvImage();
   }
   cv_bridge_img_rect_->header = img_raw_msg_.header;
-  cv_bridge_img_rect_->encoding = img_raw_msg_.encoding;
+  cv_bridge_img_rect_->encoding = currentROSEncoding();
 }
 
 struct CameraPublisherImpl

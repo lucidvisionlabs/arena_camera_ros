@@ -1,5 +1,6 @@
 uri: 'https://raw.githubusercontent.com/magazino/arena_camera/indigo-devel/rosdep/empty.tar'
-md5sum: df41600634ca08cb5082877eb64220c9
+#md5sum: df41600634ca08cb5082877eb64220c9
+md5sum: 3be7b8b182ccd96e48989b4e57311193
 install-script: |
   #!/bin/bash
   if ( [ "${ARENA_CONFIG_ROOT}" != "" ] && [ -d "${ARENA_CONFIG_ROOT}" ] ); then
@@ -43,7 +44,7 @@ check-presence-script: |
         MAJOR=`${arena_install} --version-major`
         if [ "$MAJOR" = "5" ]; then
           echo "Found a arena Installation with version 5 or greater"
-          exit 0
+          exit 1
         fi
       done
     fi

@@ -1,4 +1,4 @@
 arena:
   ubuntu:
     source:
-      uri: "https://raw.githubusercontent.com/magazino/arena_camera/indigo-devel/rosdep/arena_sdk.rdmanifest"
+      uri: "https://raw.githubusercontent.com/lucidvisionlabs/arena_camera_ros/master/catkin_ws/src/arena_camera/rosdep/arena_sdk.rdmanifest"

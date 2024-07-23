@@ -68,6 +68,11 @@ public:
   const std::string& deviceUserID() const;
 
   /**
+   * Getter for the serial_number_ set from ros-parameter server
+   */
+  int serialNumber() const;
+
+  /**
    * Setter for the device_user_id_  to the class and as well
    * the ros-parameter server
    */
@@ -305,6 +310,12 @@ protected:
    * device list will be used
    */
   std::string device_user_id_;
+
+  /**
+   * Serial number of the camera
+   * 
+   */
+  int serial_number_;
 
   /**
    * The desired publisher frame rate if listening to the topics.

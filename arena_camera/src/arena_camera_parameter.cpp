@@ -86,6 +86,8 @@ void ArenaCameraParameter::readFromRosParameterServer(const ros::NodeHandle& nh)
 
   nh.param<std::string>("device_user_id", device_user_id_, "");
 
+  nh.param<int>("serial_number", serial_number_, 0);
+
   if (nh.hasParam("frame_rate"))
   {
     nh.getParam("frame_rate", frame_rate_);
@@ -436,6 +438,11 @@ void ArenaCameraParameter::validateParameterSet(const ros::NodeHandle& nh)
 const std::string& ArenaCameraParameter::deviceUserID() const
 {
   return device_user_id_;
+}
+
+int ArenaCameraParameter::serialNumber() const
+{
+  return serial_number_;
 }
 
 std::string ArenaCameraParameter::shutterModeString() const

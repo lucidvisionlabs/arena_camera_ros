@@ -30,7 +30,7 @@
 
 // ROS
 #include <ros/ros.h>
-#include <sensor_msgs/image_encodings.h>
+#include <arena_camera/image_encodings.h>
 
 // Arena node
 #include <arena_camera/encoding_conversions.h>

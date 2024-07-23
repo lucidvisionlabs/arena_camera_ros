@@ -4,6 +4,8 @@
 #  The tf frame under which the images were published
 camera_frame: arena_camera
 
+serial_number: 0
+
 #  The DeviceUserID of the camera. If empty, the first camera found in the
 #  device list will be used
 device_user_id: ""

@@ -83,7 +83,7 @@ ArenaCameraNode::ArenaCameraNode()
   , grab_imgs_rect_as_(nullptr)
   , pinhole_model_(nullptr)
   , cv_bridge_img_rect_(nullptr)
-  , camera_info_manager_(new camera_info_manager::CameraInfoManager(nh_)) // should this be freed in ~() ?
+  , camera_info_manager_(new camera_info_manager::CameraInfoManager(nh_))  // should this be freed in ~() ?
   , sampling_indices_()
   , brightness_exp_lut_()
   , is_sleeping_(false)
@@ -149,7 +149,7 @@ void ArenaCameraNode::init()
   }
 }
 
-bool createDevice(const std::string& device_user_id_to_open)
+bool createDevice(const ArenaCameraParameter& parameter)
 {
   pSystem_ = Arena::OpenSystem();
   pSystem_->UpdateDevices(100);
@@ -163,40 +163,62 @@ bool createDevice(const std::string& device_user_id_to_open)
   }
   else
   {
-    if (device_user_id_to_open.empty())
+    ROS_INFO("Found %ld camera(s)", deviceInfos.size());
+
+    for (size_t i = 0; i < deviceInfos.size(); i++)
     {
-      pDevice_ = pSystem_->CreateDevice(deviceInfos[0]);
-      return true;
+      ROS_INFO_STREAM(" - " << deviceInfos[i].SerialNumber() << " with this IP : " << deviceInfos[i].IpAddressStr());
+    }
+
+    if (parameter.serialNumber() != 0)
+    {
+      for (auto it = deviceInfos.begin(); it != deviceInfos.end(); ++it)
+      {
+        std::string serial_number = it->SerialNumber().c_str();
+        if (serial_number == std::to_string(parameter.serialNumber()))
+        {
+          ROS_INFO_STREAM("Found the desired camera with SerialNumber " << parameter.serialNumber());
+
+          pDevice_ = pSystem_->CreateDevice(*it);
+          return true;
+        }
+      }
+
+      ROS_ERROR_STREAM("Couldn't find the camera that matches the "
+                       << "given SerialNumber: " << parameter.serialNumber());
+      return false;
     }
     else
     {
-      std::vector<Arena::DeviceInfo>::iterator it;
-      bool found_desired_device = false;
+      ROS_WARN_STREAM("No serial number defined.");
 
-      for (it = deviceInfos.begin(); it != deviceInfos.end(); ++it)
+      if (parameter.deviceUserID().empty())
       {
-        std::string device_user_id_found(it->UserDefinedName());
-        if ((0 == device_user_id_to_open.compare(device_user_id_found)) ||
-            (device_user_id_to_open.length() < device_user_id_found.length() &&
-             (0 ==
-              device_user_id_found.compare(device_user_id_found.length() - device_user_id_to_open.length(),
-                                           device_user_id_to_open.length(), device_user_id_to_open))))
-        {
-          found_desired_device = true;
-          break;
-        }
-      }
-      if (found_desired_device)
-      {
-        ROS_INFO_STREAM("Found the desired camera with DeviceUserID " << device_user_id_to_open << ": ");
-
-        pDevice_ = pSystem_->CreateDevice(*it);
+        pDevice_ = pSystem_->CreateDevice(deviceInfos[0]);
         return true;
       }
       else
       {
+        std::vector<Arena::DeviceInfo>::iterator it;
+        bool found_desired_device = false;
+
+        for (it = deviceInfos.begin(); it != deviceInfos.end(); ++it)
+        {
+          std::string device_user_id_found(it->UserDefinedName());
+          if ((0 == parameter.deviceUserID().compare(device_user_id_found)) ||
+              (parameter.deviceUserID().length() < device_user_id_found.length() &&
+               (0 == device_user_id_found.compare(device_user_id_found.length() - parameter.deviceUserID().length(),
+                                                  parameter.deviceUserID().length(), parameter.deviceUserID()))))
+          {
+            ROS_INFO_STREAM("Found the desired camera with DeviceUserID " << parameter.deviceUserID() << ": ");
+
+            pDevice_ = pSystem_->CreateDevice(*it);
+            return true;
+          }
+        }
+
         ROS_ERROR_STREAM("Couldn't find the camera that matches the "
-                         << "given DeviceUserID: " << device_user_id_to_open << "! "
+                         << "given DeviceUserID: " << parameter.deviceUserID() << "! "
                          << "Either the ID is wrong or the cam is not yet connected");
         return false;
       }
@@ -207,7 +229,7 @@ bool createDevice(const std::string& device_user_id_to_open)
 bool ArenaCameraNode::initAndRegister()
 {
   bool device_found_ = false;
-  device_found_ = createDevice(arena_camera_parameter_set_.deviceUserID());
+  device_found_ = createDevice(arena_camera_parameter_set_);
 
   if (device_found_ == false)
   {
@@ -216,7 +238,7 @@ bool ArenaCameraNode::initAndRegister()
     ros::Rate r(0.5);
     while (ros::ok() && device_found_ == false)
     {
-      device_found_ = createDevice(arena_camera_parameter_set_.deviceUserID());
+      device_found_ = createDevice(arena_camera_parameter_set_);
       if (ros::Time::now() > end)
       {
         ROS_WARN_STREAM("No camera present. Keep waiting ...");
@@ -337,8 +359,9 @@ std::string currentROSEncoding()
   if (!encoding_conversions::genAPI2Ros(gen_api_encoding, ros_encoding))
   {
     std::stringstream ss;
-    ss << "No ROS equivalent to GenApi encoding '" << gen_api_encoding << "' found! This is bad because this case "
-                                                                          "should never occur!";
+    ss << "No ROS equivalent to GenApi encoding '" << gen_api_encoding
+       << "' found! This is bad because this case "
+          "should never occur!";
     throw std::runtime_error(ss.str());
     return "NO_ENCODING";
   }
@@ -357,12 +380,11 @@ bool ArenaCameraNode::setImageEncoding(const std::string& ros_encoding)
     }
     else
     {
-      std::string fallbackPixelFormat = Arena::GetNodeValue<GenICam::gcstring>(pDevice_->GetNodeMap(), "PixelFormat").c_str();
+      std::string fallbackPixelFormat =
+          Arena::GetNodeValue<GenICam::gcstring>(pDevice_->GetNodeMap(), "PixelFormat").c_str();
       ROS_ERROR_STREAM("Can't convert ROS encoding '" << ros_encoding
                                                       << "' to a corresponding GenAPI encoding! Will use current "
-                                                      << "pixel format ( "
-                                                      << fallbackPixelFormat
-                                                      << " ) as fallback!"); 
+                                                      << "pixel format ( " << fallbackPixelFormat << " ) as fallback!");
       return false;
     }
   }
@@ -387,7 +409,7 @@ bool ArenaCameraNode::setImageEncoding(const std::string& ros_encoding)
 
 bool ArenaCameraNode::startGrabbing()
 {
-  auto  pNodeMap = pDevice_->GetNodeMap();
+  auto pNodeMap = pDevice_->GetNodeMap();
 
   try
   {
@@ -404,8 +426,8 @@ bool ArenaCameraNode::startGrabbing()
     // PACKETS
     //
     // configure Auto Negotiate Packet Size and Packet Resend
-    Arena::SetNodeValue<bool>(pDevice->GetTLStreamNodeMap(), "StreamAutoNegotiatePacketSize", true);
-    Arena::SetNodeValue<bool>(pDevice->GetTLStreamNodeMap(), "StreamPacketResendEnable", true);
+    Arena::SetNodeValue<bool>(pDevice_->GetTLStreamNodeMap(), "StreamAutoNegotiatePacketSize", true);
+    Arena::SetNodeValue<bool>(pDevice_->GetTLStreamNodeMap(), "StreamPacketResendEnable", true);
 
     //
     // TRIGGER MODE
@@ -421,36 +443,39 @@ bool ArenaCameraNode::startGrabbing()
     // FRAMERATE
     //
     auto cmdlnParamFrameRate = arena_camera_parameter_set_.frameRate();
-    auto currentFrameRate = Arena::GetNodeValue<double>(pNodeMap , "AcquisitionFrameRate");
+    auto currentFrameRate = Arena::GetNodeValue<double>(pNodeMap, "AcquisitionFrameRate");
     auto maximumFrameRate = GenApi::CFloatPtr(pNodeMap->GetNode("AcquisitionFrameRate"))->GetMax();
 
     // requested framerate larger than device max so we trancate it
     if (cmdlnParamFrameRate >= maximumFrameRate)
     {
       arena_camera_parameter_set_.setFrameRate(nh_, maximumFrameRate);
-      
-      ROS_WARN("Desired framerate %.2f Hz (rounded) is higher than max possible. Will limit "
-              "framerate device max : %.2f Hz (rounded)", cmdlnParamFrameRate, maximumFrameRate);
+
+      ROS_WARN(
+          "Desired framerate %.2f Hz (rounded) is higher than max possible. Will limit "
+          "framerate device max : %.2f Hz (rounded)",
+          cmdlnParamFrameRate, maximumFrameRate);
     }
     // special case:
     // dues to inacurate float comparision we skip. If we set it it might
-    // throw becase it could be a lil larger than the max avoid the exception (double accuracy issue when setting the node) 
-    // request frame rate very close to device max
-    else if (cmdlnParamFrameRate == maximumFrameRate){
+    // throw becase it could be a lil larger than the max avoid the exception (double accuracy issue when setting the
+    // node) request frame rate very close to device max
+    else if (cmdlnParamFrameRate == maximumFrameRate)
+    {
       ROS_INFO("Framerate is %.2f Hz", cmdlnParamFrameRate);
     }
     // requested max frame rate
-    else if (cmdlnParamFrameRate == -1) // speacial for max frame rate available
+    else if (cmdlnParamFrameRate == -1)  // speacial for max frame rate available
     {
       arena_camera_parameter_set_.setFrameRate(nh_, maximumFrameRate);
-      
+
       ROS_WARN("Framerate is set to device max : %.2f Hz", maximumFrameRate);
     }
     // requested framerate is valid so we set it to the device
-    else{
+    else
+    {
       Arena::SetNodeValue<bool>(pNodeMap, "AcquisitionFrameRateEnable", true);
-      Arena::SetNodeValue<double>(pNodeMap, "AcquisitionFrameRate" , 
-                                      cmdlnParamFrameRate);
+      Arena::SetNodeValue<double>(pNodeMap, "AcquisitionFrameRate", cmdlnParamFrameRate);
       ROS_INFO("Framerate is set to: %.2f Hz", cmdlnParamFrameRate);
     }
 
@@ -474,11 +499,11 @@ bool ArenaCameraNode::startGrabbing()
     }
 
     if (arena_camera_parameter_set_.exposure_given_)
-     {
+    {
       float reached_exposure;
       if (setExposure(arena_camera_parameter_set_.exposure_, reached_exposure))
       {
-        // Note: ont update the ros param because it might keep 
+        // Note: ont update the ros param because it might keep
         // decreasing or incresing overtime when rerun
         ROS_INFO_STREAM("Setting exposure to " << arena_camera_parameter_set_.exposure_
                                                << ", reached: " << reached_exposure);
@@ -488,7 +513,7 @@ bool ArenaCameraNode::startGrabbing()
     //
     // GAIN
     //
-    
+
     // gain_auto_ will be already set to false if gain_given_ is true
     // read params () solved the priority between them
     if (arena_camera_parameter_set_.gain_auto_)
@@ -509,7 +534,7 @@ bool ArenaCameraNode::startGrabbing()
       float reached_gain;
       if (setGain(arena_camera_parameter_set_.gain_, reached_gain))
       {
-        // Note: ont update the ros param because it might keep 
+        // Note: ont update the ros param because it might keep
         // decreasing or incresing overtime when rerun
         ROS_INFO_STREAM("Setting gain to: " << arena_camera_parameter_set_.gain_ << ", reached: " << reached_gain);
       }
@@ -641,9 +666,8 @@ bool ArenaCameraNode::startGrabbing()
           std::string(Arena::GetNodeValue<GenICam::gcstring>(pNodeMap, "DeviceUserID").c_str())))
   {
     // valid name contains only alphanumeric signs and '_'
-    ROS_WARN_STREAM(
-        "[" << std::string(Arena::GetNodeValue<GenICam::gcstring>(pNodeMap, "DeviceUserID").c_str())
-            << "] name not valid for camera_info_manager");
+    ROS_WARN_STREAM("[" << std::string(Arena::GetNodeValue<GenICam::gcstring>(pNodeMap, "DeviceUserID").c_str())
+                        << "] name not valid for camera_info_manager");
   }
 
   grab_imgs_raw_as_.start();
@@ -1875,15 +1899,15 @@ void ArenaCameraNode::genSamplingIndicesRec(std::vector<std::size_t>& indices, c
     return;  // abort criteria -> shrinked window has the min_col_size
   }
   /*
-  * sampled img:      point:                             idx:
-  * s 0 0 0 0 0 0  a) [(e.x-s.x)*0.5, (e.y-s.y)*0.5]     a.x*a.y*0.5
-  * 0 0 0 d 0 0 0  b) [a.x,           1.5*a.y]           b.y*img_rows+b.x
-  * 0 0 0 0 0 0 0  c) [0.5*a.x,       a.y]               c.y*img_rows+c.x
-  * 0 c 0 a 0 f 0  d) [a.x,           0.5*a.y]           d.y*img_rows+d.x
-  * 0 0 0 0 0 0 0  f) [1.5*a.x,       a.y]               f.y*img_rows+f.x
-  * 0 0 0 b 0 0 0
-  * 0 0 0 0 0 0 e
-  */
+   * sampled img:      point:                             idx:
+   * s 0 0 0 0 0 0  a) [(e.x-s.x)*0.5, (e.y-s.y)*0.5]     a.x*a.y*0.5
+   * 0 0 0 d 0 0 0  b) [a.x,           1.5*a.y]           b.y*img_rows+b.x
+   * 0 0 0 0 0 0 0  c) [0.5*a.x,       a.y]               c.y*img_rows+c.x
+   * 0 c 0 a 0 f 0  d) [a.x,           0.5*a.y]           d.y*img_rows+d.x
+   * 0 0 0 0 0 0 0  f) [1.5*a.x,       a.y]               f.y*img_rows+f.x
+   * 0 0 0 b 0 0 0
+   * 0 0 0 0 0 0 e
+   */
   cv::Point2i a, b, c, d, f, delta;
   a = s + 0.5 * (e - s);  // center point
   delta = 0.5 * (e - s);
